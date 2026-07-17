@@ -5,7 +5,9 @@ import { expect, test, vi } from "vitest";
 
 import {
     asPointFeatureCollection,
+    determineMatchingBoundary,
     findLandmassBoundary,
+    findMatchingPlaces,
     findNeighborhoodBoundary,
 } from "@/maps/questions/matching";
 
@@ -19,6 +21,60 @@ test("POI Matching normalizes point arrays for the Voronoi engine", () => {
 
     expect(collection.type).toBe("FeatureCollection");
     expect(collection.features).toEqual(points);
+});
+
+test("POI Matching loads the bundled Tel Aviv place snapshot", async () => {
+    const loadFixture = async (name: string) =>
+        JSON.parse(
+            await readFile(
+                new URL(`../public/data/tel-aviv/${name}`, import.meta.url),
+                "utf8",
+            ),
+        );
+    const fixtures = {
+        "places.osm.json": await loadFixture("places.osm.json"),
+        "boundaries.osm.json": await loadFixture("boundaries.osm.json"),
+    };
+    const fetchMock = vi.fn(async (url: string) => {
+        const entry = Object.entries(fixtures).find(([name]) =>
+            String(url).endsWith(name),
+        );
+        return {
+            ok: Boolean(entry),
+            status: entry ? 200 : 404,
+            json: async () => entry?.[1],
+        };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await findMatchingPlaces({
+        type: "museum-full",
+    } as any);
+
+    expect(result?.type).toBe("FeatureCollection");
+    expect(result?.features.length).toBeGreaterThan(0);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][0]).toContain(
+        "data/tel-aviv/places.osm.json",
+    );
+    expect(fetchMock.mock.calls[1][0]).toContain(
+        "data/tel-aviv/boundaries.osm.json",
+    );
+
+    const westBoundary = await determineMatchingBoundary({
+        type: "museum-full",
+        lat: 32.07763,
+        lng: 34.74323,
+    } as any);
+    const eastBoundary = await determineMatchingBoundary({
+        type: "museum-full",
+        lat: 32.09217,
+        lng: 34.8531,
+    } as any);
+    expect(westBoundary).toBeDefined();
+    expect(eastBoundary).toBeDefined();
+    expect(westBoundary).not.toEqual(eastBoundary);
+    vi.unstubAllGlobals();
 });
 
 test("the entire area north of HaYarkon is one landmass", () => {

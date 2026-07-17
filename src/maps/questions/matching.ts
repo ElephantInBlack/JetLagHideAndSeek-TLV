@@ -20,14 +20,14 @@ import {
     findAdminBoundary,
     findPlacesInZone,
     getOverpassData,
-    LOCATION_FIRST_TAG,
     nearestToQuestion,
-    prettifyLocation,
     trainLineNodeFinder,
 } from "@/maps/api";
+import { localPlaceDataProvider } from "@/maps/data";
 import { getNeighborhoodBoundary } from "@/maps/data/neighborhoods";
 import {
     findVoronoiCellForPoint,
+    geoSpatialVoronoi,
     holedMask,
     modifyMapData,
     safeUnion,
@@ -363,41 +363,12 @@ export const findMatchingPlaces = async (question: MatchingQuestion) => {
         case "park-full": {
             const location = question.type.split("-full")[0] as APILocations;
 
-            const data = await findPlacesInZone(
-                `[${LOCATION_FIRST_TAG[location]}=${location}]`,
-                `Finding ${prettifyLocation(location, true).toLowerCase()}...`,
-                "nwr",
-                "center",
-                [],
-                60,
-            );
-
-            if (data.remark && data.remark.startsWith("runtime error")) {
-                toast.error(
-                    `Error finding ${prettifyLocation(
-                        location,
-                        true,
-                    ).toLowerCase()}. Please enable hiding zone mode and switch to the Large Game variation of this question.`,
-                );
-                return [];
-            }
-
-            if (data.elements.length >= 1000) {
-                toast.error(
-                    `Too many ${prettifyLocation(
-                        location,
-                        true,
-                    ).toLowerCase()} found (${data.elements.length}). Please enable hiding zone mode and switch to the Large Game variation of this question.`,
-                );
-                return [];
-            }
-
-            return data.elements.map((x: any) =>
-                turf.point([
-                    x.center ? x.center.lon : x.lon,
-                    x.center ? x.center.lat : x.lat,
-                ]),
-            );
+            // Tel Aviv POIs are bundled with the app. Using the same local
+            // snapshot as Tentacles keeps Matching deterministic and avoids a
+            // separate Overpass request that can fail on GitHub Pages.
+            return localPlaceDataProvider.getPlaces(location, {
+                gameArea: true,
+            });
         }
     }
 };

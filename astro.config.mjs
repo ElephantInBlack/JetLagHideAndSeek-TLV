@@ -18,6 +18,12 @@ export default defineConfig({
             },
         }),
         AstroPWA({
+            registerType: "autoUpdate",
+            workbox: {
+                cleanupOutdatedCaches: true,
+                clientsClaim: true,
+                skipWaiting: true,
+            },
             manifest: {
                 name: "Jet Lag Hide and Seek Map Generator",
                 short_name: "Map Generator",
@@ -48,5 +54,5 @@ export default defineConfig({
         enabled: false,
     },
     site: "https://elephantinblack.github.io",
-    base: "JetLagHideAndSeek-TLV",
+    base: "/JetLagHideAndSeek-TLV",
 });

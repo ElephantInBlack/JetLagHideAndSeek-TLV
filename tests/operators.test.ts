@@ -2,6 +2,7 @@ import * as turf from "@turf/turf";
 import { expect, test } from "vitest";
 
 import {
+    findVoronoiCellForPoint,
     geoSpatialVoronoi,
     holedMask,
     setGameAreaMask,
@@ -21,6 +22,18 @@ test("the mask contains only eliminated area", () => {
     expect(
         turf.booleanPointInPolygon(turf.point([5, 5]), eliminatedArea!),
     ).toBe(false);
+});
+
+test("voronoi cell lookup falls back to the nearest site on an uncovered edge", () => {
+    const west = turf.point([34.78, 32.08]);
+    const east = turf.point([34.82, 32.08]);
+    const voronoi = geoSpatialVoronoi(turf.featureCollection([west, east]));
+    const sharedEdge = turf.point([34.8, 32.08]);
+
+    const cell = findVoronoiCellForPoint(voronoi, sharedEdge);
+
+    expect(cell).toBeDefined();
+    expect(cell?.properties?.site).toBeDefined();
 });
 
 test("the visual mask can include eliminated area outside the game boundary", () => {

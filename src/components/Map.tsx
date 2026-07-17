@@ -21,6 +21,7 @@ import {
     leafletMapContext,
     mapGeoJSON,
     mapGeoLocation,
+    mapRefreshToken,
     permanentOverlay,
     planningModeEnabled,
     polyGeoJSON,
@@ -125,6 +126,7 @@ export const Map = ({ className }: { className?: string }) => {
     const $baseTileLayer = useStore(baseTileLayer);
     const $thunderforestApiKey = useStore(thunderforestApiKey);
     const $hiderMode = useStore(hiderMode);
+    const $mapRefreshToken = useStore(mapRefreshToken);
     const $followMe = useStore(followMe);
     const $permanentOverlay = useStore(permanentOverlay);
     const map = useStore(leafletMapContext);
@@ -457,7 +459,7 @@ export const Map = ({ className }: { className?: string }) => {
 
         const timer = window.setTimeout(() => refreshQuestions(true), 250);
         return () => window.clearTimeout(timer);
-    }, [$questions, map, $hiderMode]);
+    }, [$questions, $mapRefreshToken, map, $hiderMode]);
 
     useEffect(() => {
         const handleFullscreenChange = () => {

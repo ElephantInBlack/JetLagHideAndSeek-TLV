@@ -26,7 +26,12 @@ import {
     trainLineNodeFinder,
 } from "@/maps/api";
 import { getNeighborhoodBoundary } from "@/maps/data/neighborhoods";
-import { holedMask, modifyMapData, safeUnion } from "@/maps/geo-utils";
+import {
+    findVoronoiCellForPoint,
+    holedMask,
+    modifyMapData,
+    safeUnion,
+} from "@/maps/geo-utils";
 import type {
     APILocations,
     HomeGameMatchingQuestions,
@@ -542,12 +547,7 @@ export const determineMatchingBoundary = _.memoize(
                 const voronoi = geoSpatialVoronoi(data);
                 const point = turf.point([question.lng, question.lat]);
 
-                for (const feature of voronoi.features) {
-                    if (turf.booleanPointInPolygon(point, feature)) {
-                        boundary = feature;
-                        break;
-                    }
-                }
+                boundary = findVoronoiCellForPoint(voronoi, point);
                 break;
             }
         }

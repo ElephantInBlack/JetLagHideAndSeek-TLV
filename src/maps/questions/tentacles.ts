@@ -3,7 +3,11 @@ import * as turf from "@turf/turf";
 import { hiderMode } from "@/lib/context";
 import { findTentacleLocations } from "@/maps/api";
 import { localPlaceDataProvider } from "@/maps/data";
-import { arcBuffer, safeUnion } from "@/maps/geo-utils";
+import {
+    arcBuffer,
+    findVoronoiCellForPoint,
+    safeUnion,
+} from "@/maps/geo-utils";
 import { geoSpatialVoronoi } from "@/maps/geo-utils";
 import type { TentacleQuestion, Units } from "@/maps/schema";
 
@@ -92,14 +96,7 @@ export const adjustPerTentacle = async (
 
     const voronoi = geoSpatialVoronoi(points);
 
-    const correctPolygon = voronoi.features.find((feature: any) => {
-        if (!question.location) return false;
-        const site = feature.properties.site.properties;
-        const selected = question.location.properties;
-        return selected.id
-            ? site.id === selected.id
-            : site.name === selected.name;
-    });
+    const correctPolygon = findVoronoiCellForPoint(voronoi, question.location);
     if (!correctPolygon) {
         return mapData;
     }

@@ -1,5 +1,11 @@
 import * as turf from "@turf/turf";
-import type { FeatureCollection, MultiPolygon, Point, Polygon } from "geojson";
+import type {
+    Feature,
+    FeatureCollection,
+    MultiPolygon,
+    Point,
+    Polygon,
+} from "geojson";
 
 const MIN_PADDING_METERS = 30_000;
 
@@ -34,4 +40,31 @@ export const geoSpatialVoronoi = (
     });
 
     return turf.featureCollection(ordered);
+};
+
+/**
+ * Finds the Voronoi cell represented by a point. The nearest-site fallback
+ * handles points that land on a shared cell edge, where point-in-polygon can
+ * legitimately return false for every cell because of floating-point noise.
+ */
+export const findVoronoiCellForPoint = (
+    voronoi: FeatureCollection<Polygon | MultiPolygon>,
+    point: Feature<Point>,
+) => {
+    const containing = voronoi.features.find((feature) =>
+        turf.booleanPointInPolygon(point, feature),
+    );
+    if (containing) return containing;
+
+    const cellsWithSites = voronoi.features.filter(
+        (feature) => feature.properties?.site?.geometry?.type === "Point",
+    );
+    if (cellsWithSites.length === 0) return undefined;
+
+    return cellsWithSites.reduce((nearest, candidate) =>
+        turf.distance(point, candidate.properties!.site) <
+        turf.distance(point, nearest.properties!.site)
+            ? candidate
+            : nearest,
+    );
 };

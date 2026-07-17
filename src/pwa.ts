@@ -2,8 +2,11 @@
 // @ts-nocheck
 import { registerSW } from "virtual:pwa-register";
 
-registerSW({
+const updateSW = registerSW({
     immediate: true,
+    onNeedRefresh() {
+        void updateSW(true);
+    },
     onRegisteredSW(swScriptUrl) {
         console.log("SW registered: ", swScriptUrl);
     },

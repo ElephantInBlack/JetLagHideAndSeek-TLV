@@ -15,7 +15,10 @@ import type {
 
 import { BLANK_GEOJSON } from "@/maps/api";
 
-export { geoSpatialVoronoi } from "@/maps/geo-utils/voronoi";
+export {
+    findVoronoiCellForPoint,
+    geoSpatialVoronoi,
+} from "@/maps/geo-utils/voronoi";
 
 let gameAreaMask: Feature<Polygon | MultiPolygon> = BLANK_GEOJSON
     .features[0] as Feature<Polygon>;

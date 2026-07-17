@@ -181,6 +181,7 @@ export const questionModified = (..._: any[]) => {
         questions.set([...questions.get()]);
     } else {
         triggerLocalRefresh.set(Math.random());
+        mapRefreshToken.set(Math.random());
     }
 };
 
@@ -201,6 +202,7 @@ export const hiderMode = persistentAtom<
     decode: JSON.parse,
 });
 export const triggerLocalRefresh = atom<number>(0);
+export const mapRefreshToken = atom<number>(0);
 export const displayHidingZones = persistentAtom<boolean>(
     "displayHidingZones",
     false,

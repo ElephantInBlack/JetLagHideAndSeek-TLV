@@ -1,19 +1,57 @@
 import * as turf from "@turf/turf";
 import { expect, test } from "vitest";
 
-import { geoSpatialVoronoi } from "@/maps/geo-utils/operators";
+import {
+    geoSpatialVoronoi,
+    holedMask,
+    setGameAreaMask,
+} from "@/maps/geo-utils/operators";
+
+test("the mask contains only eliminated area", () => {
+    const gameArea = turf.bboxPolygon([0, 0, 10, 10]);
+    const remainingArea = turf.bboxPolygon([2, 2, 8, 8]);
+    setGameAreaMask(gameArea);
+
+    const eliminatedArea = holedMask(remainingArea);
+
+    expect(eliminatedArea).not.toBeNull();
+    expect(
+        turf.booleanPointInPolygon(turf.point([1, 1]), eliminatedArea!),
+    ).toBe(true);
+    expect(
+        turf.booleanPointInPolygon(turf.point([5, 5]), eliminatedArea!),
+    ).toBe(false);
+});
+
+test("the visual mask can include eliminated area outside the game boundary", () => {
+    const gameArea = turf.bboxPolygon([2, 2, 8, 8]);
+    const remainingArea = turf.bboxPolygon([3, 3, 7, 7]);
+    const displayArea = turf.bboxPolygon([0, 0, 10, 10]);
+    setGameAreaMask(gameArea);
+
+    const eliminatedArea = holedMask(remainingArea, displayArea);
+
+    expect(eliminatedArea).not.toBeNull();
+    expect(
+        turf.booleanPointInPolygon(turf.point([1, 1]), eliminatedArea!),
+    ).toBe(true);
+    expect(
+        turf.booleanPointInPolygon(turf.point([5, 5]), eliminatedArea!),
+    ).toBe(false);
+});
 
 test("voronoi diagram", () => {
     const BASE_POINT_COUNT = 25;
     const TEST_POINT_COUNT = 500;
 
-    const basePoints = turf.randomPoint(BASE_POINT_COUNT);
+    const bbox: [number, number, number, number] = [34.73, 32.02, 34.87, 32.16];
+    const basePoints = turf.randomPoint(BASE_POINT_COUNT, { bbox });
     const voronoi = geoSpatialVoronoi(basePoints);
 
     expect(voronoi).toBeDefined();
     expect(voronoi.features.length).toBe(BASE_POINT_COUNT);
 
-    const testPoints = turf.randomPoint(TEST_POINT_COUNT);
+    const testPoints = turf.randomPoint(TEST_POINT_COUNT, { bbox });
 
     testPoints.features.forEach((point) => {
         const voronoiIndex = voronoi.features.findIndex((feature) =>

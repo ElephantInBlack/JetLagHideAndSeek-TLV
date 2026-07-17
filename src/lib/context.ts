@@ -11,6 +11,10 @@ import type {
 } from "@/maps/api";
 import { extractStationLabel } from "@/maps/geo-utils";
 import {
+    pickUnusedQuestionColor,
+    type QuestionColorName,
+} from "@/maps/questionColors";
+import {
     type DeepPartial,
     type Question,
     type Questions,
@@ -18,25 +22,26 @@ import {
     questionsSchema,
     type Units,
 } from "@/maps/schema";
+import { isTelAvivQuestionTypeAllowed } from "@/maps/telAvivQuestionSet";
 
 export const mapGeoLocation = persistentAtom<OpenStreetMap>(
-    "mapGeoLocation",
+    "telAvivMapGeoLocationV1",
     {
         geometry: {
-            coordinates: [36.5748441, 139.2394179],
+            coordinates: [32.075, 34.81],
             type: "Point",
         },
         type: "Feature",
         properties: {
             osm_type: "R",
-            osm_id: 382313,
-            extent: [45.7112046, 122.7141754, 20.2145811, 154.205541],
-            country: "Japan",
-            osm_key: "place",
-            countrycode: "JP",
-            osm_value: "country",
-            name: "Japan",
-            type: "country",
+            osm_id: 1382494,
+            extent: [32.1469766, 34.739131, 32.0293437, 34.8522617],
+            country: "Israel",
+            osm_key: "boundary",
+            countrycode: "IL",
+            osm_value: "administrative",
+            name: "Tel Aviv–Yafo",
+            type: "city",
         },
     },
     {
@@ -47,10 +52,57 @@ export const mapGeoLocation = persistentAtom<OpenStreetMap>(
 
 export const additionalMapGeoLocations = persistentAtom<
     AdditionalMapGeoLocations[]
->("additionalMapGeoLocations", [], {
-    encode: JSON.stringify,
-    decode: JSON.parse,
-});
+>(
+    "telAvivAdditionalMapGeoLocationsV1",
+    [
+        {
+            added: true,
+            base: false,
+            location: {
+                geometry: {
+                    coordinates: [32.0686867, 34.8246812],
+                    type: "Point",
+                },
+                type: "Feature",
+                properties: {
+                    osm_type: "R",
+                    osm_id: 1382493,
+                    country: "Israel",
+                    osm_key: "boundary",
+                    countrycode: "IL",
+                    osm_value: "administrative",
+                    name: "Ramat Gan",
+                    type: "town",
+                },
+            },
+        },
+        {
+            added: true,
+            base: false,
+            location: {
+                geometry: {
+                    coordinates: [32.0729606, 34.8113279],
+                    type: "Point",
+                },
+                type: "Feature",
+                properties: {
+                    osm_type: "R",
+                    osm_id: 1382923,
+                    country: "Israel",
+                    osm_key: "boundary",
+                    countrycode: "IL",
+                    osm_value: "administrative",
+                    name: "Givatayim",
+                    type: "town",
+                },
+            },
+        },
+    ],
+    {
+        encode: JSON.stringify,
+        decode: JSON.parse,
+    },
+);
 export const permanentOverlay = persistentAtom<FeatureCollection | null>(
     "permanentOverlay",
     null,
@@ -72,10 +124,57 @@ export const polyGeoJSON = persistentAtom<FeatureCollection<
 
 export const questions = persistentAtom<Questions>("questions", [], {
     encode: JSON.stringify,
-    decode: (x) => questionsSchema.parse(JSON.parse(x)),
+    decode: (x) =>
+        questionsSchema
+            .parse(JSON.parse(x))
+            .filter((question) =>
+                isTelAvivQuestionTypeAllowed(
+                    question.id,
+                    question.id === "tentacles"
+                        ? question.data.locationType
+                        : question.id === "matching" ||
+                            question.id === "measuring"
+                          ? question.data.type
+                          : undefined,
+                ),
+            ),
 });
-export const addQuestion = (question: DeepPartial<Question>) =>
-    questionModified(questions.get().push(questionSchema.parse(question)));
+export const addQuestion = (question: DeepPartial<Question>) => {
+    const existingQuestions = questions.get();
+    const parsedQuestion = questionSchema.parse(question);
+    const parsedType =
+        parsedQuestion.id === "tentacles"
+            ? parsedQuestion.data.locationType
+            : parsedQuestion.id === "matching" ||
+                parsedQuestion.id === "measuring"
+              ? parsedQuestion.data.type
+              : undefined;
+    if (!isTelAvivQuestionTypeAllowed(parsedQuestion.id, parsedType)) return;
+    const usedColors = new Set<QuestionColorName>();
+
+    existingQuestions.forEach((existingQuestion) => {
+        if (existingQuestion.id === "thermometer") {
+            usedColors.add(existingQuestion.data.colorA);
+        } else {
+            usedColors.add(existingQuestion.data.color);
+        }
+    });
+
+    if (parsedQuestion.id === "thermometer") {
+        parsedQuestion.data.colorA = pickUnusedQuestionColor(
+            parsedQuestion.data.colorA,
+            usedColors,
+        );
+        parsedQuestion.data.colorB = parsedQuestion.data.colorA;
+    } else {
+        parsedQuestion.data.color = pickUnusedQuestionColor(
+            parsedQuestion.data.color,
+            usedColors,
+        );
+    }
+
+    questionModified(existingQuestions.push(parsedQuestion));
+};
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const questionModified = (..._: any[]) => {
     if (autoSave.get()) {
@@ -87,7 +186,10 @@ export const questionModified = (..._: any[]) => {
 
 export const leafletMapContext = atom<Map | null>(null);
 
-export const defaultUnit = persistentAtom<Units>("defaultUnit", "miles");
+export const defaultUnit = persistentAtom<Units>(
+    "telAvivDefaultUnitMetricV1",
+    "kilometers",
+);
 export const hiderMode = persistentAtom<
     | false
     | {

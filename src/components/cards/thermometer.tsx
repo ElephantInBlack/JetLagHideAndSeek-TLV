@@ -34,7 +34,7 @@ export const ThermometerQuestionComponent = ({
     const $isLoading = useStore(isLoading);
 
     const $defaultUnit = useStore(defaultUnit);
-    const DISTANCE_UNIT = $defaultUnit ?? "miles";
+    const DISTANCE_UNIT = $defaultUnit ?? "kilometers";
 
     const label = `Thermometer
     ${
@@ -97,7 +97,7 @@ export const ThermometerQuestionComponent = ({
                 latitude={data.latB}
                 longitude={data.lngB}
                 label="End"
-                colorName={data.colorB}
+                colorName={data.colorA}
                 onChange={(lat, lng) => {
                     if (lat !== null) data.latB = lat;
                     if (lng !== null) data.lngB = lng;

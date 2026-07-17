@@ -17,6 +17,13 @@ import { BLANK_GEOJSON } from "@/maps/api";
 
 export { geoSpatialVoronoi } from "@/maps/geo-utils/voronoi";
 
+let gameAreaMask: Feature<Polygon | MultiPolygon> = BLANK_GEOJSON
+    .features[0] as Feature<Polygon>;
+
+export const setGameAreaMask = (mask: Feature<Polygon | MultiPolygon>) => {
+    gameAreaMask = mask;
+};
+
 export const safeUnion = (input: FeatureCollection<Polygon | MultiPolygon>) => {
     if (input.features.length === 1) return input.features[0];
     const union = turf.union(input);
@@ -28,10 +35,14 @@ export const holedMask = (
     input:
         | Feature<Polygon | MultiPolygon>
         | FeatureCollection<Polygon | MultiPolygon>,
+    outerMask: Feature<Polygon | MultiPolygon> = gameAreaMask,
 ) => {
+    if ("features" in input && input.features.length === 0) {
+        return outerMask;
+    }
     return turf.difference(
         turf.featureCollection([
-            BLANK_GEOJSON.features[0] as Feature<Polygon>,
+            outerMask,
             "features" in input ? safeUnion(input) : input,
         ]),
     );
@@ -44,20 +55,24 @@ export const modifyMapData = (
         | Feature<Polygon | MultiPolygon>,
     withinModifications: boolean,
 ) => {
+    if (mapData.features.length === 0) {
+        return turf.featureCollection([]);
+    }
     const safeModifications =
         "features" in modifications ? safeUnion(modifications) : modifications;
 
     if (withinModifications) {
-        return turf.intersect(
+        const intersection = turf.intersect(
             turf.featureCollection([safeUnion(mapData), safeModifications]),
         );
+        return intersection ?? turf.featureCollection([]);
     }
-    return turf.intersect(
-        turf.featureCollection([
-            safeUnion(mapData),
-            holedMask(safeModifications)!,
-        ]),
+    const remainingMask = holedMask(safeModifications);
+    if (!remainingMask) return turf.featureCollection([]);
+    const intersection = turf.intersect(
+        turf.featureCollection([safeUnion(mapData), remainingMask]),
     );
+    return intersection ?? turf.featureCollection([]);
 };
 
 const DEFAULT_BUFFER_UNIT = "miles";

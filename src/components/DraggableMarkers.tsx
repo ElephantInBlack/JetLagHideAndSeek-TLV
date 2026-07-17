@@ -1,6 +1,6 @@
 import { useStore } from "@nanostores/react";
-import { type DragEndEvent, Icon } from "leaflet";
-import { useState } from "react";
+import { DivIcon, type DragEndEvent } from "leaflet";
+import { useMemo, useState } from "react";
 import { Fragment } from "react/jsx-runtime";
 import { Marker } from "react-leaflet";
 
@@ -13,7 +13,7 @@ import {
     save,
     triggerLocalRefresh,
 } from "@/lib/context";
-import type { ICON_COLORS } from "@/maps/api";
+import { findNearestTentacleLocation } from "@/maps/questions/tentacles";
 
 import { LatitudeLongitude } from "./LatLngPicker";
 import {
@@ -23,15 +23,24 @@ import {
     TentacleQuestionComponent,
     ThermometerQuestionComponent,
 } from "./QuestionCards";
+import {
+    HIDER_MARKER_COLOR,
+    QUESTION_MARKER_SYMBOLS,
+    QUESTION_MARKER_TITLES,
+    questionMarkerColor,
+    type QuestionMarkerKind,
+} from "./questionMarkerStyle";
 import { Button } from "./ui/button";
 import { SidebarMenu } from "./ui/sidebar-l";
 
 let isDragging = false;
+const tentacleDragGenerations = new Map<number, number>();
 
 const ColoredMarker = ({
     latitude,
     longitude,
     color,
+    kind,
     onChange,
     questionKey,
     sub = "",
@@ -39,7 +48,8 @@ const ColoredMarker = ({
     onChange: (event: DragEndEvent) => void;
     latitude: number;
     longitude: number;
-    color: keyof typeof ICON_COLORS;
+    color: string;
+    kind: QuestionMarkerKind;
     questionKey: number;
     sub?: string;
 }) => {
@@ -47,24 +57,38 @@ const ColoredMarker = ({
     const $hiderMode = useStore(hiderMode);
     const $autoSave = useStore(autoSave);
     const [open, setOpen] = useState(false);
+    const icon = useMemo(
+        () =>
+            new DivIcon({
+                className: "question-map-marker",
+                html: `<div title="${QUESTION_MARKER_TITLES[kind]}" style="
+                    align-items:center;
+                    background:${color};
+                    border:3px solid white;
+                    border-radius:50% 50% 50% 0;
+                    box-shadow:0 2px 7px rgba(0,0,0,.45);
+                    color:white;
+                    display:flex;
+                    font-family:system-ui,sans-serif;
+                    font-size:16px;
+                    font-weight:800;
+                    height:30px;
+                    justify-content:center;
+                    transform:rotate(-45deg);
+                    width:30px;
+                "><span style="transform:rotate(45deg)">${QUESTION_MARKER_SYMBOLS[kind]}</span></div>`,
+                iconAnchor: [15, 32],
+                iconSize: [30, 32],
+                popupAnchor: [0, -32],
+            }),
+        [color, kind],
+    );
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <Marker
                 position={[latitude, longitude]}
-                icon={
-                    color
-                        ? new Icon({
-                              iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
-                              shadowUrl:
-                                  "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
-                              iconSize: [25, 41],
-                              iconAnchor: [12, 41],
-                              popupAnchor: [1, -34],
-                              shadowSize: [41, 41],
-                          })
-                        : undefined
-                }
+                icon={icon}
                 draggable={true}
                 eventHandlers={{
                     dragstart: () => {
@@ -193,7 +217,8 @@ export const DraggableMarkers = () => {
         <Fragment>
             {$hiderMode !== false && (
                 <ColoredMarker
-                    color="green"
+                    color={HIDER_MARKER_COLOR}
+                    kind="hider"
                     key="hider"
                     sub="Hider Location"
                     questionKey={-1}
@@ -227,12 +252,12 @@ export const DraggableMarkers = () => {
 
                 switch (question.id) {
                     case "radius":
-                    case "tentacles":
                     case "matching":
                     case "measuring":
                         return (
                             <ColoredMarker
-                                color={question.data.color}
+                                color={questionMarkerColor(question.data.color)}
+                                kind={question.id}
                                 key={question.key}
                                 questionKey={question.key}
                                 latitude={question.data.lat}
@@ -246,11 +271,56 @@ export const DraggableMarkers = () => {
                                 }}
                             />
                         );
+                    case "tentacles":
+                        return (
+                            <ColoredMarker
+                                color={questionMarkerColor(question.data.color)}
+                                kind="tentacles"
+                                key={question.key}
+                                questionKey={question.key}
+                                latitude={question.data.lat}
+                                longitude={question.data.lng}
+                                onChange={async (e) => {
+                                    question.data.lat =
+                                        e.target.getLatLng().lat;
+                                    question.data.lng =
+                                        e.target.getLatLng().lng;
+
+                                    const generation =
+                                        (tentacleDragGenerations.get(
+                                            question.key,
+                                        ) ?? 0) + 1;
+                                    tentacleDragGenerations.set(
+                                        question.key,
+                                        generation,
+                                    );
+                                    questionModified();
+
+                                    if (hiderMode.get() !== false) return;
+                                    const nearest =
+                                        await findNearestTentacleLocation(
+                                            question.data,
+                                        );
+                                    if (
+                                        tentacleDragGenerations.get(
+                                            question.key,
+                                        ) !== generation
+                                    )
+                                        return;
+
+                                    question.data.location = nearest;
+                                    questionModified();
+                                }}
+                            />
+                        );
                     case "thermometer":
                         return (
                             <Fragment key={question.key}>
                                 <ColoredMarker
-                                    color={question.data.colorA}
+                                    color={questionMarkerColor(
+                                        question.data.colorA,
+                                    )}
+                                    kind="thermometer-start"
                                     key={"a" + question.key.toString()}
                                     questionKey={question.key}
                                     sub="Start"
@@ -265,7 +335,10 @@ export const DraggableMarkers = () => {
                                     }}
                                 />
                                 <ColoredMarker
-                                    color={question.data.colorB}
+                                    color={questionMarkerColor(
+                                        question.data.colorA,
+                                    )}
+                                    kind="thermometer-end"
                                     key={"b" + question.key.toString()}
                                     questionKey={question.key}
                                     sub="End"

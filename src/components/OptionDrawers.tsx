@@ -20,7 +20,6 @@ import {
     customInitPreference,
     customPresets,
     customStations,
-    defaultCustomQuestions,
     defaultUnit,
     disabledStations,
     displayHidingZonesOptions,
@@ -33,8 +32,6 @@ import {
     leafletMapContext,
     mapGeoJSON,
     mapGeoLocation,
-    overpassCustomHost,
-    overpassHost,
     pastebinApiKey,
     permanentOverlay,
     planningModeEnabled,
@@ -54,7 +51,6 @@ import {
     shareOrFallback,
     uploadToPastebin,
 } from "@/lib/utils";
-import { OVERPASS_HOSTS } from "@/maps/api/constants";
 import { questionsSchema } from "@/maps/schema";
 
 import { LatitudeLongitude } from "./LatLngPicker";
@@ -77,7 +73,6 @@ const PASTEBIN_URL_PARAM = "pb";
 
 export const OptionDrawers = ({ className }: { className?: string }) => {
     useStore(triggerLocalRefresh);
-    const $defaultCustomQuestions = useStore(defaultCustomQuestions);
     const $allowGooglePlusCodes = useStore(allowGooglePlusCodes);
     const $defaultUnit = useStore(defaultUnit);
     const $animateMapMovements = useStore(animateMapMovements);
@@ -92,8 +87,6 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
     const $alwaysUsePastebin = useStore(alwaysUsePastebin);
     const $followMe = useStore(followMe);
     const $customInitPref = useStore(customInitPreference);
-    const $overpassHost = useStore(overpassHost);
-    const $overpassCustomHost = useStore(overpassCustomHost);
     const lastDefaultUnit = useRef($defaultUnit);
     const hasSyncedInitialUnit = useRef(false);
     const [isOptionsOpen, setOptionsOpen] = useState(false);
@@ -506,42 +499,6 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                 </p>
                             </div>
                             <Separator className="bg-slate-300 w-[280px]" />
-                            <Label>Overpass API Host</Label>
-                            <Select
-                                trigger="Overpass API host"
-                                options={{
-                                    ...Object.fromEntries(
-                                        Object.entries(OVERPASS_HOSTS).map(
-                                            ([label, url]) => [url, label],
-                                        ),
-                                    ),
-                                    custom: "Custom URL",
-                                }}
-                                value={$overpassHost}
-                                onValueChange={(v) =>
-                                    overpassHost.set(v as any)
-                                }
-                            />
-                            {$overpassHost === "custom" && (
-                                <div className="flex flex-col items-center gap-2 w-full">
-                                    <Input
-                                        type="text"
-                                        value={$overpassCustomHost}
-                                        onChange={(e) =>
-                                            overpassCustomHost.set(
-                                                e.target.value,
-                                            )
-                                        }
-                                        placeholder="https://your-overpass-instance/api/interpreter"
-                                    />
-                                </div>
-                            )}
-                            <p className="text-xs text-gray-500 text-center">
-                                {$overpassHost === "custom"
-                                    ? "The other hosts will be used as fallbacks if this one fails."
-                                    : "The remaining hosts will be tried as fallbacks if the selected one fails."}
-                            </p>
-                            <Separator className="bg-slate-300 w-[280px]" />
                             <Label>Permanent Map Overlay</Label>
                             <div className="flex flex-row max-[330px]:flex-col gap-4">
                                 <Button
@@ -649,27 +606,24 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                     }
                                 />
                             </div>
-                            <div className="flex flex-row items-center gap-2">
-                                <label className="text-2xl font-semibold font-poppins">
-                                    Follow Me (GPS)?
-                                </label>
+                            <div className="flex flex-row items-center justify-between gap-3">
+                                <div>
+                                    <label
+                                        htmlFor="show-current-location-pin"
+                                        className="text-2xl font-semibold font-poppins"
+                                    >
+                                        Always show my location pin
+                                    </label>
+                                    <p className="text-sm text-muted-foreground">
+                                        Continuously updates a separate GPS pin
+                                        on the map. Off by default.
+                                    </p>
+                                </div>
                                 <Checkbox
+                                    id="show-current-location-pin"
                                     checked={$followMe}
                                     onCheckedChange={() =>
                                         followMe.set(!$followMe)
-                                    }
-                                />
-                            </div>
-                            <div className="flex flex-row items-center gap-2">
-                                <label className="text-2xl font-semibold font-poppins">
-                                    Default to custom questions?
-                                </label>
-                                <Checkbox
-                                    checked={$defaultCustomQuestions}
-                                    onCheckedChange={() =>
-                                        defaultCustomQuestions.set(
-                                            !$defaultCustomQuestions,
-                                        )
                                     }
                                 />
                             </div>

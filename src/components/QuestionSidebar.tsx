@@ -105,7 +105,7 @@ export const QuestionSidebar = () => {
                         </SidebarMenuItem>
                         <SidebarMenuItem>
                             <a
-                                href="https://github.com/taibeled/JetLagHideAndSeek"
+                                href="https://github.com/ElephantInBlack/JetLagHideAndSeek-TLV"
                                 target="_blank"
                                 rel="noopener noreferrer"
                             >

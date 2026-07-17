@@ -1,6 +1,7 @@
 import { useStore } from "@nanostores/react";
 import * as turf from "@turf/turf";
-import { Suspense, use } from "react";
+import { Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 import { LatitudeLongitude } from "@/components/LatLngPicker";
 import PresetsDialog from "@/components/PresetsDialog";
@@ -22,13 +23,13 @@ import {
 } from "@/lib/context";
 import { cn, mapToObj } from "@/lib/utils";
 import { findTentacleLocations } from "@/maps/api";
+import { matchesPoiSearch } from "@/maps/poiSearch";
+import { findTentacleGeometryLocations } from "@/maps/questions/tentacles";
 import {
-    determineUnionizedStrings,
-    NO_GROUP,
     type TentacleQuestion,
-    tentacleQuestionSchema,
     type TraditionalTentacleQuestion,
 } from "@/maps/schema";
+import { TEL_AVIV_TENTACLE_TYPES } from "@/maps/telAvivQuestionSet";
 
 import { QuestionCard } from "./base";
 
@@ -73,14 +74,17 @@ export const TentacleQuestionComponent = ({
                 <div className={cn(MENU_ITEM_CLASSNAME, "gap-2 flex flex-row")}>
                     <Input
                         type="number"
+                        inputMode="decimal"
+                        step="any"
                         className="rounded-md p-2 w-16"
                         value={data.radius}
-                        onChange={(e) =>
-                            questionModified(
-                                (data.radius = parseFloat(e.target.value)),
-                            )
-                        }
-                        disabled={!data.drag || $isLoading}
+                        onChange={(e) => {
+                            const radius = parseFloat(e.target.value);
+                            if (!Number.isFinite(radius)) return;
+                            data.radius = radius;
+                            questionModified();
+                        }}
+                        disabled={!data.drag}
                     />
                     <UnitSelect
                         unit={data.unit}
@@ -94,29 +98,7 @@ export const TentacleQuestionComponent = ({
             <SidebarMenuItem className={MENU_ITEM_CLASSNAME}>
                 <Select
                     trigger="Location Type"
-                    options={Object.fromEntries(
-                        tentacleQuestionSchema.options
-                            .filter((x) => x.description === NO_GROUP)
-                            .flatMap((x) =>
-                                determineUnionizedStrings(x.shape.locationType),
-                            )
-                            .map((x) => [(x._def as any).value, x.description]),
-                    )}
-                    groups={Object.fromEntries(
-                        tentacleQuestionSchema.options
-                            .filter((x) => x.description !== NO_GROUP)
-                            .map((x) => [
-                                x.description,
-                                Object.fromEntries(
-                                    determineUnionizedStrings(
-                                        x.shape.locationType,
-                                    ).map((x) => [
-                                        (x._def as any).value,
-                                        x.description,
-                                    ]),
-                                ),
-                            ]),
-                    )}
+                    options={TEL_AVIV_TENTACLE_TYPES}
                     value={data.locationType}
                     onValueChange={async (value) => {
                         if (value === "custom") {
@@ -130,7 +112,7 @@ export const TentacleQuestionComponent = ({
                                 properties: {
                                     ...x.properties,
                                     name:
-                                        x.properties?.["name:en"] ??
+                                        (x.properties as any)?.["name:en"] ??
                                         x.properties?.name,
                                 },
                             }));
@@ -186,38 +168,10 @@ export const TentacleQuestionComponent = ({
                 disabled={!data.drag || $isLoading}
             />
             <SidebarMenuItem className={MENU_ITEM_CLASSNAME}>
-                <Suspense
-                    fallback={
-                        <div className="flex items-center justify-center w-full h-8">
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="24"
-                                height="24"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                className="animate-spin"
-                            >
-                                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                            </svg>
-                        </div>
-                    }
-                >
-                    <TentacleLocationSelector
-                        data={data}
-                        promise={
-                            data.locationType === "custom"
-                                ? Promise.resolve(
-                                      turf.featureCollection(data.places),
-                                  )
-                                : findTentacleLocations(data)
-                        }
-                        disabled={!data.drag || $isLoading}
-                    />
-                </Suspense>
+                <TentacleLocationSelector
+                    data={data}
+                    disabled={!data.drag || $isLoading}
+                />
             </SidebarMenuItem>
         </QuestionCard>
     );
@@ -225,83 +179,171 @@ export const TentacleQuestionComponent = ({
 
 const TentacleLocationSelector = ({
     data,
-    promise,
     disabled,
 }: {
     data: TentacleQuestion;
-    promise: Promise<any>;
     disabled: boolean;
 }) => {
-    useStore(triggerLocalRefresh);
+    const refreshToken = useStore(triggerLocalRefresh);
     const $hiderMode = useStore(hiderMode);
-    const locations = use(promise);
+    const [locations, setLocations] = useState<any>(() =>
+        turf.featureCollection(
+            data.locationType === "custom" ? (data.places ?? []) : [],
+        ),
+    );
+    const [loading, setLoading] = useState(data.locationType !== "custom");
+    const [searchQuery, setSearchQuery] = useState("");
 
-    // Filter locations to only those within the radius of the primary location
-    const filteredFeatures = (() => {
+    useEffect(() => {
+        let cancelled = false;
+        setLoading(true);
+        const request =
+            data.locationType === "custom"
+                ? Promise.resolve(turf.featureCollection(data.places ?? []))
+                : findTentacleGeometryLocations(data);
+
+        request
+            .then((result) => {
+                if (!cancelled) setLocations(result);
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [data.locationType, data.places, refreshToken]);
+
+    // Keep every POI available, but put nearby choices first.
+    const availableFeatures = useMemo(() => {
+        const features = [...locations.features];
         if (
             data.lat === null ||
             data.lng === null ||
             data.radius === undefined ||
             data.radius === null
         ) {
-            return locations.features;
+            return features.sort((a: any, b: any) =>
+                (a.properties.displayName ?? a.properties.name).localeCompare(
+                    b.properties.displayName ?? b.properties.name,
+                ),
+            );
         }
 
         const center = turf.point([data.lng, data.lat]);
 
-        return locations.features.filter((feature: any) => {
-            const coords =
-                feature?.geometry?.coordinates ??
-                (feature?.properties?.lon && feature?.properties?.lat
-                    ? [feature.properties.lon, feature.properties.lat]
-                    : null);
+        return features
+            .map((feature: any) => ({
+                feature,
+                distance: turf.distance(center, feature, {
+                    units: data.unit,
+                }),
+            }))
+            .sort((a, b) => a.distance - b.distance)
+            .map(({ feature }) => feature);
+    }, [locations, data.lat, data.lng, data.radius, data.unit]);
 
-            if (!coords) return false;
-
-            const pt = turf.point(coords);
-            const dist = turf.distance(center, pt, { units: data.unit });
-
-            return dist <= data.radius;
-        });
-    })();
-
-    // If the currently selected location is no longer within radius, clear it.
-    const _selectedLocationName = data.location
-        ? data.location.properties?.name
+    // Clear a selection only when the POI no longer belongs to the category.
+    const selectedLocationId = data.location
+        ? ((data.location.properties as any)?.id ??
+          data.location.properties?.name)
         : null;
-    if (
-        _selectedLocationName &&
-        !filteredFeatures.find(
-            (f: any) => f.properties.name === _selectedLocationName,
-        )
-    ) {
-        data.location = false;
-        questionModified();
-    }
+    const matchingFeatures = useMemo(
+        () =>
+            availableFeatures.filter((feature: any) =>
+                matchesPoiSearch(feature.properties, searchQuery),
+            ),
+        [availableFeatures, searchQuery],
+    );
+    const selectableFeatures = useMemo(() => {
+        if (!selectedLocationId) return matchingFeatures;
+        const selectedFeature = availableFeatures.find(
+            (feature: any) =>
+                (feature.properties.id ?? feature.properties.name) ===
+                selectedLocationId,
+        );
+        if (
+            !selectedFeature ||
+            matchingFeatures.some(
+                (feature: any) =>
+                    (feature.properties.id ?? feature.properties.name) ===
+                    selectedLocationId,
+            )
+        ) {
+            return matchingFeatures;
+        }
+        return [selectedFeature, ...matchingFeatures];
+    }, [availableFeatures, matchingFeatures, selectedLocationId]);
+
+    useEffect(() => setSearchQuery(""), [data.locationType]);
+    useEffect(() => {
+        if (
+            selectedLocationId &&
+            !availableFeatures.find(
+                (feature: any) =>
+                    (feature.properties.id ?? feature.properties.name) ===
+                    selectedLocationId,
+            )
+        ) {
+            data.location = false;
+            questionModified();
+        }
+    }, [selectedLocationId, availableFeatures, data]);
+
+    const selectorDisabled = !!$hiderMode || disabled || loading;
 
     return (
-        <Select
-            trigger="Location"
-            options={{
-                false: "Not Within",
-                ...mapToObj(filteredFeatures, (feature: any) => [
-                    feature.properties.name,
-                    feature.properties.name,
-                ]),
-            }}
-            value={data.location ? data.location.properties.name : "false"}
-            onValueChange={(value) => {
-                if (value === "false") {
-                    data.location = false;
-                } else {
-                    data.location = filteredFeatures.find(
-                        (feature: any) => feature.properties.name === value,
-                    );
+        <div className="flex w-full flex-col gap-2">
+            <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                    aria-label="Search Tentacles POIs"
+                    className="pl-9"
+                    dir="auto"
+                    placeholder="חיפוש מקום..."
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    disabled={selectorDisabled}
+                />
+            </div>
+            {searchQuery && matchingFeatures.length === 0 && (
+                <p className="px-1 text-xs text-muted-foreground">
+                    לא נמצאו מקומות תואמים
+                </p>
+            )}
+            <Select
+                trigger="Location"
+                options={{
+                    false: "Not Within",
+                    ...mapToObj(selectableFeatures, (feature: any) => [
+                        feature.properties.id ?? feature.properties.name,
+                        feature.properties.displayName ??
+                            feature.properties.name,
+                    ]),
+                }}
+                value={
+                    data.location
+                        ? ((data.location.properties as any).id ??
+                          data.location.properties.name)
+                        : "false"
                 }
+                onValueChange={(value) => {
+                    if (value === "false") {
+                        data.location = false;
+                    } else {
+                        data.location =
+                            availableFeatures.find(
+                                (feature: any) =>
+                                    (feature.properties.id ??
+                                        feature.properties.name) === value,
+                            ) ?? false;
+                    }
 
-                questionModified();
-            }}
-            disabled={!!$hiderMode || disabled}
-        />
+                    questionModified();
+                }}
+                disabled={selectorDisabled}
+            />
+        </div>
     );
 };

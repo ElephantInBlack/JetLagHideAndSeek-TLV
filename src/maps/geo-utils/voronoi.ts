@@ -1,28 +1,37 @@
 import * as turf from "@turf/turf";
-import { geoMercator } from "d3-geo";
-// @ts-expect-error No type declaration
-import { geoProject, geoStitch } from "d3-geo-projection";
-// @ts-expect-error No type declaration
-import { geoVoronoi } from "d3-geo-voronoi";
 import type { FeatureCollection, MultiPolygon, Point, Polygon } from "geojson";
 
-const scaleReference = turf.toMercator(turf.point([180, 90])); // I thought this would yield the same as turf.earthRadius * Math.pi, but it's slightly larger
+const MIN_PADDING_METERS = 30_000;
 
+/**
+ * Builds a bounded planar Voronoi diagram for the metro-sized game area.
+ * The previous implementation stitched and projected cells for the entire
+ * globe, which was unnecessarily expensive for a fixed city map.
+ */
 export const geoSpatialVoronoi = (
     points: FeatureCollection<Point>,
 ): FeatureCollection<Polygon | MultiPolygon> => {
-    const voronoi = geoVoronoi()(points).polygons();
-    const projected = geoProject(
-        geoStitch(voronoi),
-        geoMercator().translate([0, 0]).precision(0.005),
-    );
+    if (points.features.length === 0) return turf.featureCollection([]);
 
-    const ratio = scaleReference.geometry.coordinates[0] / 480.5; // 961 is the default scale for some reason
-
-    turf.coordEach(projected, (coord) => {
-        coord[0] = coord[0] * ratio;
-        coord[1] = coord[1] * -ratio; // y-coordinates are flipped
+    const projectedPoints = turf.toMercator(points);
+    const [minX, minY, maxX, maxY] = turf.bbox(projectedPoints);
+    const padding = Math.max(MIN_PADDING_METERS, maxX - minX, maxY - minY);
+    const bounded = turf.voronoi(projectedPoints, {
+        bbox: [minX - padding, minY - padding, maxX + padding, maxY + padding],
     });
 
-    return turf.toWgs84(projected);
+    const ordered = projectedPoints.features.flatMap((projectedSite, index) => {
+        const polygon = bounded.features.find((candidate) =>
+            turf.booleanPointInPolygon(projectedSite, candidate),
+        );
+        if (!polygon) return [];
+        const unprojected = turf.toWgs84(polygon);
+        unprojected.properties = {
+            ...(unprojected.properties ?? {}),
+            site: points.features[index],
+        };
+        return [unprojected];
+    });
+
+    return turf.featureCollection(ordered);
 };

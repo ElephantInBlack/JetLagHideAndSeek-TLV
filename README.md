@@ -1,5 +1,16 @@
 # Jet Lag The Game: Hide and Seek Map Generator
 
+This fork is a dedicated, performance-focused build for Tel Aviv–Yafo, Ramat
+Gan, and Givatayim. It bundles a dated OpenStreetMap snapshot for supported
+questions, stations, municipal boundaries, and the local coastline. Normal
+three-city workflows—including Tentacles radii up to 15 miles—are answered
+locally; larger custom searches show a notice before using Overpass.
+
+The snapshot was generated on 2026-07-15 from OpenStreetMap relation IDs
+1382494, 1382493, and 1382923. Data © OpenStreetMap contributors, ODbL 1.0.
+See [`public/data/tel-aviv/README.md`](public/data/tel-aviv/README.md) for data
+details.
+
 A tool to trivially generate interactive maps for viewing hiding possibilities in Jet Lag The Game's Hide and Seek. So far, the following questions have been implemented (see https://github.com/taibeled/JetLagHideAndSeek/issues/9 for more):
 
 - Radius
@@ -76,8 +87,8 @@ Even if you're not a programmer, you can still help by further documenting the u
 To develop this website, you need to have [git](https://git-scm.com/downloads), [Node.js](https://nodejs.org/) (version 24 or earlier), and [pnpm](https://pnpm.io/installation) installed. You should then start by cloning this repository and entering the directory:
 
 ```bash
-git clone https://github.com/taibeled/JetLagHideAndSeek.git
-cd JetLagHideAndSeek
+git clone https://github.com/ElephantInBlack/JetLagHideAndSeek-TLV.git
+cd JetLagHideAndSeek-TLV
 ```
 
 Next, use `pnpm` to install the dependencies:
@@ -92,7 +103,8 @@ You can now host the website as you make modifications:
 pnpm dev
 ```
 
-After making any modifications, please run `pnpm lint` to have your code automatically formatted and errors spotted.
+After making changes, use `pnpm format` to rewrite formatting. The non-mutating
+validation commands are `pnpm check`, `pnpm test`, and `pnpm build`.
 
 ## Contributors
 

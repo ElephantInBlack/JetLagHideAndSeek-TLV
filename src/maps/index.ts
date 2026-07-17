@@ -27,6 +27,12 @@ import {
 } from "./questions/thermometer";
 import type { Question, Questions } from "./schema";
 
+let questionCalculationCache: {
+    base: any;
+    hashes: string[];
+    results: any[];
+} | null = null;
+
 export * from "./geo-utils";
 
 export const hiderifyQuestion = async (question: Question) => {
@@ -116,7 +122,32 @@ export async function applyQuestionsToMapGeoData(
         question: any,
     ) => void,
 ): Promise<any> {
-    for (const question of questions) {
+    const baseMapGeoData = mapGeoData;
+    const hashes = questions.map((question) => JSON.stringify(question));
+    let startIndex = 0;
+
+    const existingCache = questionCalculationCache;
+    const canReuseCache =
+        !planningModeEnabled && existingCache?.base === baseMapGeoData;
+    if (canReuseCache && existingCache) {
+        while (
+            startIndex < hashes.length &&
+            existingCache.hashes[startIndex] === hashes[startIndex]
+        ) {
+            startIndex++;
+        }
+        if (startIndex > 0) {
+            mapGeoData = existingCache.results[startIndex - 1];
+        }
+    }
+
+    const results =
+        startIndex > 0 && existingCache
+            ? existingCache.results.slice(0, startIndex)
+            : [];
+
+    for (let index = startIndex; index < questions.length; index++) {
+        const question = questions[index];
         if (planningModeCallback) {
             const planningPolygon = await determinePlanningPolygon(
                 question,
@@ -127,6 +158,7 @@ export async function applyQuestionsToMapGeoData(
             }
         }
         if (planningModeEnabled && question.data.drag) {
+            results[index] = mapGeoData;
             continue;
         }
 
@@ -138,6 +170,19 @@ export async function applyQuestionsToMapGeoData(
                 features: [mapGeoData],
             };
         }
+        results[index] = mapGeoData;
+    }
+
+    if (!planningModeEnabled) {
+        questionCalculationCache = {
+            base: baseMapGeoData,
+            hashes,
+            results,
+        };
     }
     return mapGeoData;
 }
+
+export const clearQuestionCalculationCache = () => {
+    questionCalculationCache = null;
+};

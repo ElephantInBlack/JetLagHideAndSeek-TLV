@@ -80,10 +80,7 @@ const thermometerQuestionSchema = z
         hidden: z.boolean().default(false),
     })
     .transform((question) => {
-        if (question.colorA === question.colorB) {
-            question.colorB = "green";
-        }
-
+        question.colorB = question.colorA;
         return question;
     });
 
@@ -107,12 +104,12 @@ const getDefaultUnit = () => {
     try {
         return defaultUnit.get();
     } catch {
-        return "miles";
+        return "kilometers";
     }
 };
 
 const radiusQuestionSchema = ordinaryBaseQuestionSchema.extend({
-    radius: z.number().min(0, "You cannot have a negative radius").default(50),
+    radius: z.number().min(0, "You cannot have a negative radius").default(2),
     unit: unitsSchema.default(getDefaultUnit),
     within: z.boolean().default(true),
 });
@@ -140,7 +137,7 @@ const apiLocationSchema = z.union([
 ]);
 
 const baseTentacleQuestionSchema = ordinaryBaseQuestionSchema.extend({
-    radius: z.number().min(0, "You cannot have a negative radius").default(15),
+    radius: z.number().min(0, "You cannot have a negative radius").default(2),
     unit: unitsSchema.default(getDefaultUnit),
     location: z
         .union([
@@ -161,13 +158,13 @@ const baseTentacleQuestionSchema = ordinaryBaseQuestionSchema.extend({
 });
 const tentacleQuestionSpecificSchemaFifteen = baseTentacleQuestionSchema.extend(
     {
-        locationType: tentacleLocationsFifteen.default("theme_park"),
+        locationType: tentacleLocationsFifteen,
         places: z.array(z.any()).optional(),
     },
 );
 
 const tentacleQuestionSpecificSchemaOne = baseTentacleQuestionSchema.extend({
-    locationType: tentacleLocationsOne,
+    locationType: tentacleLocationsOne.default("museum"),
     places: z.array(z.any()).optional(),
 });
 
@@ -196,8 +193,8 @@ const customTentacleQuestionSchema = baseTentacleQuestionSchema.extend({
 
 export const tentacleQuestionSchema = z.union([
     customTentacleQuestionSchema.describe(NO_GROUP),
-    tentacleQuestionSpecificSchemaFifteen.describe("15 Miles (Typically)"),
-    tentacleQuestionSpecificSchemaOne.describe("1 Mile (Typically)"),
+    tentacleQuestionSpecificSchemaFifteen.describe("Attractions"),
+    tentacleQuestionSpecificSchemaOne.describe("Local Places"),
 ]);
 
 const baseMatchingQuestionSchema = ordinaryBaseQuestionSchema.extend({
@@ -245,8 +242,12 @@ const ordinaryMatchingQuestionSchema = baseMatchingQuestionSchema.extend({
             z
                 .literal("park-full")
                 .describe("Park Question (Small+Medium Games)"),
+            z.literal("transit-line").describe("Transit Line"),
+            z.literal("street-path").describe("Street or Path"),
+            z.literal("neighborhood").describe("Neighborhood"),
+            z.literal("landmass").describe("Landmass"),
         ])
-        .default("airport"),
+        .default("museum-full"),
 });
 
 const zoneMatchingQuestionsSchema = baseMatchingQuestionSchema.extend({

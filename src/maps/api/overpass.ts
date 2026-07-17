@@ -11,7 +11,16 @@ import {
     overpassHost,
     polyGeoJSON,
 } from "@/lib/context";
-import { safeUnion } from "@/maps/geo-utils";
+import {
+    explicitHebrewPoiContext,
+    hebrewPoiNeedsContext,
+    type LocalPlaceCategory,
+    localPlaceDataProvider,
+    localPlacesToOverpass,
+    shortenHebrewPoiName,
+    TEL_AVIV_DATA_MANIFEST,
+} from "@/maps/data";
+import { safeUnion, setGameAreaMask } from "@/maps/geo-utils";
 
 import { cacheFetch, determineCache } from "./cache";
 import { LOCATION_FIRST_TAG, OVERPASS_HOSTS } from "./constants";
@@ -82,6 +91,14 @@ export const determineGeoJSON = async (
     osmId: string,
     osmTypeLetter: "W" | "R" | "N",
 ): Promise<any> => {
+    if (osmTypeLetter === "R") {
+        const localBoundary = await localPlaceDataProvider.getBoundary(
+            Number(osmId),
+        );
+        if (localBoundary) {
+            return turf.featureCollection([localBoundary]);
+        }
+    }
     const osmTypeMap: { [key: string]: string } = {
         W: "way",
         R: "relation",
@@ -107,6 +124,21 @@ export const findTentacleLocations = async (
     question: EncompassingTentacleQuestionSchema,
     text: string = "Determining tentacle locations...",
 ) => {
+    const scope = {
+        center: [question.lng, question.lat] as const,
+        radius: question.radius,
+        unit: question.unit,
+        gameArea: true as const,
+        hebrewPoiLabels: true as const,
+    };
+    if (localPlaceDataProvider.canAnswerCircle(scope)) {
+        return localPlaceDataProvider.getPlaces(question.locationType, scope);
+    }
+
+    toast.info(
+        "This radius extends beyond the bundled Tel Aviv data; using Overpass for this question.",
+        { toastId: "local-data-coverage" },
+    );
     const query = `
 [out:json][timeout:25];
 nwr["${LOCATION_FIRST_TAG[question.locationType]}"="${question.locationType}"](around:${turf.convertLength(
@@ -119,34 +151,67 @@ out center;
     const data = await getOverpassData(query, text);
     const elements = data.elements;
     const response = turf.points([]);
+    const hebrewNameForElement = (element: any) => {
+        const genericName = element.tags.name?.trim();
+        const name =
+            element.tags["name:he"]?.trim() ??
+            (genericName && /[\u0590-\u05ff]/u.test(genericName)
+                ? genericName
+                : undefined);
+        return name ? shortenHebrewPoiName(name) : undefined;
+    };
+    const nameCounts = new Map<string, number>();
     elements.forEach((element: any) => {
-        if (!element.tags["name"] && !element.tags["name:en"]) return;
-        if (element.lat && element.lon) {
-            const name = element.tags["name:en"] ?? element.tags["name"];
-            if (
-                response.features.find(
-                    (feature: any) => feature.properties.name === name,
-                )
-            )
-                return;
-            response.features.push(
-                turf.point([element.lon, element.lat], { name }),
-            );
-        }
-        if (!element.center || !element.center.lon || !element.center.lat)
-            return;
-        const name = element.tags["name:en"] ?? element.tags["name"];
-        if (
-            response.features.find(
-                (feature: any) => feature.properties.name === name,
-            )
-        )
-            return;
+        const name = hebrewNameForElement(element);
+        if (name) nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
+    });
+
+    elements.forEach((element: any) => {
+        const nameHe = hebrewNameForElement(element);
+        if (!nameHe) return;
+
+        const coordinates =
+            typeof element.lat === "number" && typeof element.lon === "number"
+                ? [element.lon, element.lat]
+                : element.center &&
+                    typeof element.center.lat === "number" &&
+                    typeof element.center.lon === "number"
+                  ? [element.center.lon, element.center.lat]
+                  : null;
+        if (!coordinates) return;
+
+        const id = `${element.type}/${element.id}`;
+        const possibleCityContext =
+            element.tags["object:city"] ?? element.tags["addr:city"];
+        const cityContext =
+            possibleCityContext && /[\u0590-\u05ff]/u.test(possibleCityContext)
+                ? possibleCityContext.trim()
+                : undefined;
+        const context =
+            explicitHebrewPoiContext(id, element.tags) ?? cityContext;
+        const displayName =
+            hebrewPoiNeedsContext(nameHe, nameCounts.get(nameHe) ?? 0) &&
+            context &&
+            !nameHe.includes(context)
+                ? `${nameHe} — ${context}`
+                : nameHe;
+
         response.features.push(
-            turf.point([element.center.lon, element.center.lat], { name }),
+            turf.point(coordinates, {
+                id,
+                name: nameHe,
+                nameHe,
+                nameEn: element.tags["name:en"]?.trim(),
+                displayName,
+            }),
         );
     });
-    return response;
+    const gameBoundary = await localPlaceDataProvider.getGameBoundary();
+    return turf.featureCollection(
+        response.features.filter((place) =>
+            turf.booleanPointInPolygon(place, gameBoundary),
+        ),
+    );
 };
 
 export const findAdminBoundary = async (
@@ -154,6 +219,17 @@ export const findAdminBoundary = async (
     longitude: number,
     adminLevel: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10,
 ) => {
+    if (adminLevel === 8) {
+        const point = turf.point([longitude, latitude]);
+        for (const relationId of TEL_AVIV_DATA_MANIFEST.relationIds) {
+            const boundary =
+                await localPlaceDataProvider.getBoundary(relationId);
+            if (boundary && turf.booleanPointInPolygon(point, boundary)) {
+                return boundary;
+            }
+        }
+    }
+
     const query = `
 [out:json];
 is_in(${latitude}, ${longitude})->.a;
@@ -167,7 +243,7 @@ out geom;
 
 export const fetchCoastline = async () => {
     const response = await cacheFetch(
-        import.meta.env.BASE_URL + "/coastline50.geojson",
+        import.meta.env.BASE_URL + "/data/tel-aviv/coastline.geojson",
         "Fetching coastline data...",
         CacheType.PERMANENT_CACHE,
     );
@@ -242,6 +318,46 @@ export const findPlacesInZone = async (
     alternatives: string[] = [],
     timeoutDuration: number = 0,
 ) => {
+    const localFilters = [filter, ...alternatives];
+    const isStationFilter = (candidate: string) =>
+        /\[(railway|highway|public_transport|platform|aerialway)=/.test(
+            candidate,
+        ) || /\[amenity=ferry_terminal\]/.test(candidate);
+    if (localFilters.every(isStationFilter)) {
+        const stations = await localPlaceDataProvider.getStations(localFilters);
+        return localPlacesToOverpass(stations.features);
+    }
+
+    const determineLocalCategory = (
+        candidate: string,
+    ): LocalPlaceCategory | null => {
+        if (/brand:wikidata[^\]]*Q38076/.test(candidate)) return "mcdonalds";
+        if (/brand:wikidata[^\]]*Q259340/.test(candidate)) return "seven11";
+        if (/aeroway[^\]]*aerodrome/.test(candidate) && /iata/.test(candidate))
+            return "airport";
+        if (/place[^\]]*city/.test(candidate)) return "major-city";
+
+        for (const [category, firstTag] of Object.entries(LOCATION_FIRST_TAG)) {
+            const expression = new RegExp(
+                `${firstTag}["']?\\s*=\\s*["']?${category}`,
+            );
+            if (expression.test(candidate)) {
+                return category as LocalPlaceCategory;
+            }
+        }
+        return null;
+    };
+
+    if (localFilters.length === 1) {
+        const category = determineLocalCategory(filter);
+        if (category) {
+            const places = await localPlaceDataProvider.getPlaces(category, {
+                gameArea: true,
+            });
+            return localPlacesToOverpass(places.features);
+        }
+    }
+
     let query = "";
     const $polyGeoJSON = polyGeoJSON.get();
     if ($polyGeoJSON) {
@@ -372,9 +488,21 @@ export const findPlacesSpecificInZone = async (
 export const nearestToQuestion = async (
     question: HomeGameMatchingQuestions | HomeGameMeasuringQuestions,
 ) => {
+    const localNearest = await localPlaceDataProvider.getNearest(
+        question.type,
+        [question.lng, question.lat],
+    );
+    if (localNearest) {
+        return turf.nearestPoint(
+            turf.point([question.lng, question.lat]),
+            turf.featureCollection([localNearest]),
+        );
+    }
+
     let radius = 30;
     let instances: any = { features: [] };
-    while (instances.features.length === 0) {
+    const maxAttempts = 6;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
         instances = await findTentacleLocations(
             {
                 lat: question.lat,
@@ -386,16 +514,30 @@ export const nearestToQuestion = async (
                 drag: false,
                 color: "black",
                 collapsed: false,
+                hidden: false,
             },
             "Finding matching locations...",
         );
         radius += 30;
+        if (instances.features.length > 0) break;
+    }
+    if (instances.features.length === 0) {
+        throw new Error(
+            `No ${question.type} location found after ${maxAttempts} bounded searches`,
+        );
     }
     const questionPoint = turf.point([question.lng, question.lat]);
     return turf.nearestPoint(questionPoint, instances as any);
 };
 
 export const determineMapBoundaries = async () => {
+    const localBoundary = await localPlaceDataProvider.getGameBoundary();
+    setGameAreaMask(localBoundary);
+    return turf.combine(
+        turf.featureCollection([localBoundary]),
+    ) as FeatureCollection<MultiPolygon>;
+
+    /* Global-region fallback retained below for future upstream compatibility. */
     const mapGeoDatum = await Promise.all(
         [
             {

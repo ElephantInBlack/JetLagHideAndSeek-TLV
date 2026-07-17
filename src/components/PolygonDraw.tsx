@@ -9,8 +9,8 @@ import type {
 } from "geojson";
 import * as L from "leaflet";
 import _ from "lodash";
-import { useEffect, useRef, useState } from "react";
-import { FeatureGroup, Marker, Polygon, Polyline } from "react-leaflet";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { FeatureGroup, Marker, Polygon, Polyline, useMap } from "react-leaflet";
 import { EditControl } from "react-leaflet-draw";
 
 import {
@@ -52,6 +52,41 @@ const swapCoordinates = (geojson: any) => {
         }
         return value;
     });
+};
+
+const ClearPolygonControl = ({ onClear }: { onClear: () => void }) => {
+    const map = useMap();
+
+    useEffect(() => {
+        const control = new L.Control({ position: "bottomleft" });
+        control.onAdd = () => {
+            const container = L.DomUtil.create(
+                "div",
+                "leaflet-bar leaflet-control",
+            );
+            const button = L.DomUtil.create("a", "", container);
+            button.href = "#";
+            button.title = "Remove polygon area";
+            button.setAttribute("role", "button");
+            button.setAttribute("aria-label", "Remove polygon area");
+            button.innerHTML = "&times;";
+            button.style.fontSize = "24px";
+            button.style.lineHeight = "28px";
+
+            L.DomEvent.disableClickPropagation(container);
+            L.DomEvent.disableScrollPropagation(container);
+            L.DomEvent.on(button, "click", (event) => {
+                L.DomEvent.preventDefault(event);
+                onClear();
+            });
+            return container;
+        };
+
+        control.addTo(map);
+        return () => control.remove();
+    }, [map, onClear]);
+
+    return null;
 };
 
 const TentacleMarker = ({
@@ -238,6 +273,7 @@ const MeasuringPointMarker = ({
 
 export const PolygonDraw = () => {
     const $drawingQuestionKey = useStore(drawingQuestionKey);
+    const $polyGeoJSON = useStore(polyGeoJSON);
     const $questions = useStore(questions);
 
     const featureRef = useRef<any | null>(null);
@@ -262,11 +298,23 @@ export const PolygonDraw = () => {
         }
     }
 
+    const clearPolygonArea = useCallback(() => {
+        featureRef.current?.clearLayers();
+        polyGeoJSON.set(null);
+        mapGeoJSON.set(null);
+        clearCache(CacheType.ZONE_CACHE);
+        questions.set([...questions.get()]);
+    }, []);
+
     const onChange = () => {
         if (drawingQuestionKey.get() === -1) {
             if (!featureRef.current?._layers) return;
 
             const layers = featureRef.current._layers;
+            if (Object.keys(layers).length === 0) {
+                clearPolygonArea();
+                return;
+            }
             const geoJSONs = Object.values(layers).map((layer: any) =>
                 layer.toGeoJSON(),
             );
@@ -394,6 +442,9 @@ export const PolygonDraw = () => {
 
     return (
         <FeatureGroup ref={featureRef}>
+            {$drawingQuestionKey === -1 && $polyGeoJSON && (
+                <ClearPolygonControl onClear={clearPolygonArea} />
+            )}
             {question &&
                 question.id === "tentacles" &&
                 question.data.locationType === "custom" &&

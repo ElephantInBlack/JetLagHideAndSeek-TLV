@@ -52,7 +52,7 @@ const tutorialSteps: TutorialStep[] = [
                 this guide covers advanced features you might not know about. To
                 support this free tool, please consider{" "}
                 <a
-                    href="https://github.com/taibeled/JetLagHideAndSeek"
+                    href="https://github.com/ElephantInBlack/JetLagHideAndSeek-TLV"
                     className="text-blue-500 cursor-pointer"
                     target="_blank"
                     rel="noreferrer"
@@ -262,6 +262,7 @@ const tutorialSteps: TutorialStep[] = [
                             questionKey={Math.random()}
                             data={{
                                 collapsed: false,
+                                hidden: false,
                                 drag: true,
                                 lat: 35.6762,
                                 lng: 139.6503,
@@ -312,6 +313,7 @@ const tutorialSteps: TutorialStep[] = [
                             questionKey={Math.random()}
                             data={{
                                 collapsed: false,
+                                hidden: false,
                                 drag: true,
                                 latA: 35.6762,
                                 lngA: 139.6503,
@@ -359,6 +361,7 @@ const tutorialSteps: TutorialStep[] = [
                             questionKey={Math.random()}
                             data={{
                                 collapsed: false,
+                                hidden: false,
                                 drag: true,
                                 lat: 35.6762,
                                 lng: 139.6503,
@@ -410,6 +413,7 @@ const tutorialSteps: TutorialStep[] = [
                             questionKey={Math.random()}
                             data={{
                                 collapsed: false,
+                                hidden: false,
                                 drag: true,
                                 lat: 35.6762,
                                 lng: 139.6503,
@@ -492,6 +496,7 @@ const tutorialSteps: TutorialStep[] = [
                             questionKey={Math.random()}
                             data={{
                                 collapsed: false,
+                                hidden: false,
                                 drag: true,
                                 lat: 35.6762,
                                 lng: 139.6503,
@@ -636,8 +641,9 @@ const tutorialSteps: TutorialStep[] = [
                 <br />• <strong>Highlight Train Lines:</strong> Visual emphasis
                 on railway networks. Requires Thunderforest API key but provides
                 crucial visual context for train-related questions.
-                <br />• <strong>Follow Me:</strong> GPS tracking for mobile use.
-                Adds a marker that follows your location in real-time.
+                <br />• <strong>Always show my location pin:</strong> Optional
+                GPS tracking for mobile use. Adds a separate marker that follows
+                your location in real time and is off by default.
                 <br />
                 <br />
                 <strong>Unit Preferences:</strong>
@@ -775,7 +781,7 @@ const tutorialSteps: TutorialStep[] = [
                 <strong>Need Help?</strong> This tutorial is always available
                 via the Tutorial button. Feel free to{" "}
                 <a
-                    href="https://github.com/taibeled/JetLagHideAndSeek/issues"
+                    href="https://github.com/ElephantInBlack/JetLagHideAndSeek-TLV/issues"
                     className="text-blue-500 cursor-pointer"
                     target="_blank"
                     rel="noreferrer"
@@ -788,7 +794,7 @@ const tutorialSteps: TutorialStep[] = [
                 <strong>Support the Project:</strong> If this tool enhances your
                 Jet Lag games, please consider{" "}
                 <a
-                    href="https://github.com/taibeled/JetLagHideAndSeek"
+                    href="https://github.com/ElephantInBlack/JetLagHideAndSeek-TLV"
                     className="text-blue-500 cursor-pointer"
                     target="_blank"
                     rel="noreferrer"

@@ -1,5 +1,5 @@
 import * as turf from "@turf/turf";
-import type { Feature, MultiPolygon } from "geojson";
+import type { Feature, FeatureCollection, LineString } from "geojson";
 import _ from "lodash";
 import osmtogeojson from "osmtogeojson";
 import { toast } from "react-toastify";
@@ -9,7 +9,6 @@ import {
     mapGeoJSON,
     mapGeoLocation,
     polyGeoJSON,
-    trainStations,
 } from "@/lib/context";
 import {
     fetchCoastline,
@@ -21,6 +20,7 @@ import {
     prettifyLocation,
     QuestionSpecificLocation,
 } from "@/maps/api";
+import { localPlaceDataProvider } from "@/maps/data";
 import {
     arcBufferToPoint,
     connectToSeparateLines,
@@ -33,6 +33,7 @@ import type {
     HomeGameMeasuringQuestions,
     MeasuringQuestion,
 } from "@/maps/schema";
+import { TEL_AVIV_MEASURING_STATION_IDS } from "@/maps/telAvivQuestionSet";
 
 export interface AdminZoneInfo {
     name: string;
@@ -90,32 +91,30 @@ const highSpeedBase = _.memoize(
     (features) => `${JSON.stringify(features.map((x) => x.geometry))}`,
 );
 
-const bboxExtension = (
-    bBox: [number, number, number, number],
-    distance: number,
-): [number, number, number, number] => {
-    const buffered = turf.bbox(
-        turf.buffer(turf.bboxPolygon(bBox), Math.abs(distance), {
-            units: "miles",
-        })!,
-    );
+export const coastlineMeasurementLines = (
+    coastline: FeatureCollection,
+): Feature<LineString>[] =>
+    turf
+        .flatten(coastline)
+        .features.filter(
+            (feature): feature is Feature<LineString> =>
+                feature.geometry.type === "LineString",
+        )
+        .map((feature) => {
+            const hasSyntheticClosure = String(
+                feature.properties?.note ?? "",
+            ).includes("Offshore closure points are synthetic");
+            if (!hasSyntheticClosure) return feature;
 
-    const originalDeltaLat = bBox[3] - bBox[1];
-    const originalDeltaLng = bBox[2] - bBox[0];
-
-    return [
-        buffered[0] - originalDeltaLng,
-        buffered[1] - originalDeltaLat,
-        buffered[2] + originalDeltaLng,
-        buffered[3] + originalDeltaLat,
-    ];
-};
+            return turf.lineString(
+                feature.geometry.coordinates.slice(0, -3),
+                feature.properties ?? {},
+            );
+        });
 
 export const determineMeasuringBoundary = async (
     question: MeasuringQuestion,
 ) => {
-    const bBox = turf.bbox(mapGeoJSON.get()!);
-
     switch (question.type) {
         case "highspeed-measure-shinkansen": {
             const features = osmtogeojson(
@@ -153,41 +152,23 @@ export const determineMeasuringBoundary = async (
             return [outline];
         }
         case "coastline": {
-            const coastline = turf.lineToPolygon(
-                await fetchCoastline(),
-            ) as Feature<MultiPolygon>;
-
-            const distanceToCoastline = turf.pointToPolygonDistance(
-                turf.point([question.lng, question.lat]),
-                coastline,
-                {
-                    units: "miles",
-                    method: "geodesic",
-                },
+            return coastlineMeasurementLines(await fetchCoastline());
+        }
+        case "rail-measure": {
+            const stations = await localPlaceDataProvider.getStations([
+                "[railway=station]",
+                "[railway=halt]",
+            ]);
+            const selected = stations.features.filter((station) =>
+                TEL_AVIV_MEASURING_STATION_IDS.has(station.properties.id),
             );
-
+            if (selected.length === 0) {
+                throw new Error(
+                    "The four Tel Aviv measuring stations are missing from the local snapshot",
+                );
+            }
             return [
-                turf.difference(
-                    turf.featureCollection([
-                        turf.bboxPolygon(bBox),
-                        turf.buffer(
-                            turf.bboxClip(
-                                coastline,
-                                bBox
-                                    ? bboxExtension(
-                                          bBox as any,
-                                          distanceToCoastline,
-                                      )
-                                    : [-180, -90, 180, 90],
-                            ),
-                            distanceToCoastline,
-                            {
-                                units: "miles",
-                                steps: 64,
-                            },
-                        )!,
-                    ]),
-                )!,
+                turf.multiPoint(selected.map((x) => x.geometry.coordinates)),
             ];
         }
         case "airport":
@@ -301,7 +282,6 @@ export const determineMeasuringBoundary = async (
         case "park":
         case "mcdonalds":
         case "seven11":
-        case "rail-measure":
             return false;
     }
 };
@@ -376,6 +356,7 @@ export const hiderifyMeasuring = async (question: MeasuringQuestion) => {
             drag: false,
             color: "black",
             collapsed: false,
+            hidden: false,
         });
 
         question.hiderCloser =
@@ -383,34 +364,6 @@ export const hiderifyMeasuring = async (question: MeasuringQuestion) => {
             hiderNearest.properties.distanceToPoint;
 
         return question;
-    }
-
-    if (question.type === "rail-measure") {
-        const stations = trainStations.get();
-
-        if (stations.length === 0) {
-            return question;
-        }
-
-        const location = turf.point([question.lng, question.lat]);
-
-        const nearestTrainStation = turf.nearestPoint(
-            location,
-            turf.featureCollection(stations.map((x) => x.properties)),
-        );
-
-        const distance = turf.distance(location, nearestTrainStation);
-
-        const hider = turf.point([$hiderMode.longitude, $hiderMode.latitude]);
-
-        const hiderNearest = turf.nearestPoint(
-            hider,
-            turf.featureCollection(stations.map((x) => x.properties)),
-        );
-
-        const hiderDistance = turf.distance(hider, hiderNearest);
-
-        question.hiderCloser = hiderDistance < distance;
     }
 
     if (question.type === "mcdonalds" || question.type === "seven11") {

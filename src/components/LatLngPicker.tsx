@@ -376,7 +376,7 @@ export const LatitudeLongitude = ({
                 <div
                     className={cn(
                         !inlineEdit &&
-                            "flex justify-center gap-2 *:max-w-12 *:w-[20%]",
+                            "flex flex-wrap justify-center gap-2 *:max-w-12 *:w-[20%]",
                     )}
                 >
                     {inlineEdit ? (
@@ -427,10 +427,18 @@ export const LatitudeLongitude = ({
                         }
                     >
                         <Button
+                            className={cn(
+                                !inlineEdit &&
+                                    "order-first !w-full !max-w-none sm:order-none sm:!w-[20%] sm:!max-w-12",
+                            )}
                             variant="outline"
                             onClick={() => {
-                                if (!navigator || !navigator.geolocation)
-                                    return alert("Geolocation not supported");
+                                if (!navigator || !navigator.geolocation) {
+                                    toast.error(
+                                        "Current location is not supported by this browser",
+                                    );
+                                    return;
+                                }
 
                                 isLoading.set(true);
 
@@ -443,6 +451,7 @@ export const LatitudeLongitude = ({
                                                 {
                                                     maximumAge: 0,
                                                     enableHighAccuracy: true,
+                                                    timeout: 15_000,
                                                 },
                                             );
                                         },
@@ -465,9 +474,15 @@ export const LatitudeLongitude = ({
                                 );
                             }}
                             disabled={disabled}
-                            title="Set to current location"
+                            title="Use my current location"
+                            aria-label={`Use my current location for ${label}`}
                         >
                             <LocateIcon />
+                            {!inlineEdit && (
+                                <span className="sm:hidden">
+                                    Use my location
+                                </span>
+                            )}
                         </Button>
                         <Button
                             variant="outline"

@@ -15,7 +15,6 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
     customInitPreference,
-    displayHidingZones,
     drawingQuestionKey,
     hiderMode,
     isLoading,
@@ -28,12 +27,8 @@ import {
     determineMatchingBoundary,
     findMatchingPlaces,
 } from "@/maps/questions/matching";
-import {
-    determineUnionizedStrings,
-    type MatchingQuestion,
-    matchingQuestionSchema,
-    NO_GROUP,
-} from "@/maps/schema";
+import { type MatchingQuestion } from "@/maps/schema";
+import { TEL_AVIV_MATCHING_TYPES } from "@/maps/telAvivQuestionSet";
 
 import { QuestionCard } from "./base";
 
@@ -51,7 +46,6 @@ export const MatchingQuestionComponent = ({
     useStore(triggerLocalRefresh);
     const $hiderMode = useStore(hiderMode);
     const $questions = useStore(questions);
-    const $displayHidingZones = useStore(displayHidingZones);
     const $drawingQuestionKey = useStore(drawingQuestionKey);
     const $isLoading = useStore(isLoading);
     const $customInitPref = useStore(customInitPreference);
@@ -70,7 +64,6 @@ export const MatchingQuestionComponent = ({
     let questionSpecific = <></>;
 
     switch (data.type) {
-        case "zone":
         case "letter-zone":
             questionSpecific = (
                 <>
@@ -114,6 +107,39 @@ export const MatchingQuestionComponent = ({
                         </span>
                     )}
                 </>
+            );
+            break;
+        case "zone":
+            questionSpecific = (
+                <span className="px-2 text-center text-muted-foreground">
+                    City boundaries are fixed to Tel Aviv, Ramat Gan, and
+                    Givatayim.
+                </span>
+            );
+            break;
+        case "neighborhood":
+            questionSpecific = (
+                <span className="px-2 text-center text-muted-foreground">
+                    Uses Tel Aviv municipal borders and municipality-derived
+                    2017 borders for Ramat Gan. Givatayim uses official CBS 2022
+                    sub-quarters because the city does not publish polygons.
+                </span>
+            );
+            break;
+        case "landmass":
+            questionSpecific = (
+                <span className="px-2 text-center text-muted-foreground">
+                    Landmasses are divided by the Ayalon corridor and HaYarkon.
+                </span>
+            );
+            break;
+        case "street-path":
+        case "transit-line":
+            questionSpecific = (
+                <span className="px-2 text-center text-orange-500">
+                    This question uses live OpenStreetMap route geometry because
+                    roads and transit lines change frequently.
+                </span>
             );
             break;
         case "same-train-line":
@@ -244,53 +270,7 @@ export const MatchingQuestionComponent = ({
             <SidebarMenuItem className={MENU_ITEM_CLASSNAME}>
                 <Select
                     trigger="Matching Type"
-                    options={Object.fromEntries(
-                        matchingQuestionSchema.options
-                            .filter((x) => x.description === NO_GROUP)
-                            .flatMap((x) =>
-                                determineUnionizedStrings(x.shape.type),
-                            )
-                            .map((x) => [(x._def as any).value, x.description]),
-                    )}
-                    groups={matchingQuestionSchema.options
-                        .filter((x) => x.description !== NO_GROUP)
-                        .map((x) => [
-                            x.description,
-                            Object.fromEntries(
-                                determineUnionizedStrings(x.shape.type).map(
-                                    (x) => [
-                                        (x._def as any).value,
-                                        x.description,
-                                    ],
-                                ),
-                            ),
-                        ])
-                        .reduce(
-                            (acc, [key, value]) => {
-                                const values = {
-                                    disabled: !$displayHidingZones,
-                                    options: value,
-                                };
-
-                                if (acc[key]) {
-                                    acc[key].options = {
-                                        ...acc[key].options,
-                                        ...value,
-                                    };
-                                } else {
-                                    acc[key] = values;
-                                }
-
-                                return acc;
-                            },
-                            {} as Record<
-                                string,
-                                {
-                                    disabled: boolean;
-                                    options: Record<string, string>;
-                                }
-                            >,
-                        )}
+                    options={TEL_AVIV_MATCHING_TYPES}
                     value={data.type}
                     onValueChange={async (value) => {
                         if (
@@ -360,7 +340,10 @@ export const MatchingQuestionComponent = ({
 
                         // The category should be defined such that no error is thrown if this is a zone question.
                         if (!(data as any).cat) {
-                            (data as any).cat = { adminLevel: 3 };
+                            (data as any).cat = { adminLevel: 8 };
+                        }
+                        if (value === "zone") {
+                            (data as any).cat.adminLevel = 8;
                         }
                         questionModified((data.type = value));
                     }}

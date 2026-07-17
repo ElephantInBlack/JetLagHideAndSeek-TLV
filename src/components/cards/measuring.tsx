@@ -15,7 +15,6 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
     customInitPreference,
-    displayHidingZones,
     drawingQuestionKey,
     hiderMode,
     isLoading,
@@ -28,12 +27,8 @@ import {
     determineMeasuringBoundary,
     findAdminZoneInfo,
 } from "@/maps/questions/measuring";
-import {
-    determineUnionizedStrings,
-    type MeasuringQuestion,
-    measuringQuestionSchema,
-    NO_GROUP,
-} from "@/maps/schema";
+import { type MeasuringQuestion } from "@/maps/schema";
+import { TEL_AVIV_MEASURING_TYPES } from "@/maps/telAvivQuestionSet";
 
 import { QuestionCard } from "./base";
 
@@ -51,7 +46,6 @@ export const MeasuringQuestionComponent = ({
     useStore(triggerLocalRefresh);
     const $hiderMode = useStore(hiderMode);
     const $questions = useStore(questions);
-    const $displayHidingZones = useStore(displayHidingZones);
     const $drawingQuestionKey = useStore(drawingQuestionKey);
     const $isLoading = useStore(isLoading);
     const $customInitPref = useStore(customInitPreference);
@@ -236,53 +230,7 @@ export const MeasuringQuestionComponent = ({
             <SidebarMenuItem className={MENU_ITEM_CLASSNAME}>
                 <Select
                     trigger="Measuring Type"
-                    options={Object.fromEntries(
-                        measuringQuestionSchema.options
-                            .filter((x) => x.description === NO_GROUP)
-                            .flatMap((x) =>
-                                determineUnionizedStrings(x.shape.type),
-                            )
-                            .map((x) => [(x._def as any).value, x.description]),
-                    )}
-                    groups={measuringQuestionSchema.options
-                        .filter((x) => x.description !== NO_GROUP)
-                        .map((x) => [
-                            x.description,
-                            Object.fromEntries(
-                                determineUnionizedStrings(x.shape.type).map(
-                                    (x) => [
-                                        (x._def as any).value,
-                                        x.description,
-                                    ],
-                                ),
-                            ),
-                        ])
-                        .reduce(
-                            (acc, [key, value]) => {
-                                const values = {
-                                    disabled: !$displayHidingZones,
-                                    options: value,
-                                };
-
-                                if (acc[key]) {
-                                    acc[key].options = {
-                                        ...acc[key].options,
-                                        ...value,
-                                    };
-                                } else {
-                                    acc[key] = values;
-                                }
-
-                                return acc;
-                            },
-                            {} as Record<
-                                string,
-                                {
-                                    disabled: boolean;
-                                    options: Record<string, string>;
-                                }
-                            >,
-                        )}
+                    options={TEL_AVIV_MEASURING_TYPES}
                     value={data.type}
                     onValueChange={async (value) => {
                         if (value === "custom-measure") {

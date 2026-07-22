@@ -25,7 +25,6 @@ import { cn, mapToObj } from "@/lib/utils";
 import { findTentacleLocations } from "@/maps/api";
 import { matchesPoiSearch } from "@/maps/poiSearch";
 import { findTentacleGeometryLocations } from "@/maps/questions/tentacles";
-import { distanceToRoad } from "@/maps/questions/roads";
 import {
     type TentacleQuestion,
     type TraditionalTentacleQuestion,
@@ -237,11 +236,9 @@ const TentacleLocationSelector = ({
         return features
             .map((feature: any) => ({
                 feature,
-                distance:
-                    feature.geometry.type === "LineString" ||
-                    feature.geometry.type === "MultiLineString"
-                        ? distanceToRoad(center, feature)
-                        : turf.distance(center, feature, { units: data.unit }),
+                distance: turf.distance(center, feature, {
+                    units: data.unit,
+                }),
             }))
             .sort((a, b) => a.distance - b.distance)
             .map(({ feature }) => feature);

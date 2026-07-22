@@ -12,7 +12,6 @@ test("only spreadsheet Matching, Measuring, and Tentacles types are enabled", ()
     expect(Object.keys(TEL_AVIV_MATCHING_TYPES)).toEqual([
         "transit-line",
         "street-path",
-        "major-road",
         "zone",
         "neighborhood",
         "landmass",
@@ -25,7 +24,6 @@ test("only spreadsheet Matching, Measuring, and Tentacles types are enabled", ()
     expect(Object.keys(TEL_AVIV_MEASURING_TYPES)).toEqual([
         "rail-measure",
         "coastline",
-        "major-road",
         "park-full",
         "museum-full",
         "library-full",
@@ -36,7 +34,6 @@ test("only spreadsheet Matching, Measuring, and Tentacles types are enabled", ()
         "library",
         "cinema",
         "museum",
-        "major-road",
     ]);
 
     expect(isTelAvivQuestionTypeAllowed("matching", "zoo-full")).toBe(false);

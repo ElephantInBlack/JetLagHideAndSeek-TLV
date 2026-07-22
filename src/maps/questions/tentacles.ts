@@ -10,12 +10,6 @@ import {
 } from "@/maps/geo-utils";
 import { geoSpatialVoronoi } from "@/maps/geo-utils";
 import type { TentacleQuestion, Units } from "@/maps/schema";
-import {
-    findMajorRoads,
-    findNearestMajorRoad,
-    majorRoadBoundary,
-    majorRoadDisplayFeature,
-} from "./roads";
 
 const filterPointsWithinRadius = (
     points: any,
@@ -63,13 +57,6 @@ export const findTentacleGeometryLocations = async (
     if (question.locationType === "custom") {
         return turf.featureCollection(question.places);
     }
-    if (question.locationType === "major-road") {
-        return turf.featureCollection(
-            (await findMajorRoads(question.lat, question.lng)).map(
-                majorRoadDisplayFeature,
-            ),
-        );
-    }
 
     return localPlaceDataProvider.getPlaces(question.locationType, {
         gameArea: true,
@@ -80,10 +67,6 @@ export const findTentacleGeometryLocations = async (
 export const findNearestTentacleLocation = async (
     question: TentacleQuestion,
 ) => {
-    if (question.locationType === "major-road") {
-        const road = await findNearestMajorRoad(question.lat, question.lng);
-        return road ? majorRoadDisplayFeature(road) : false;
-    }
     const rawPoints =
         question.locationType === "custom"
             ? turf.featureCollection(question.places)
@@ -109,18 +92,7 @@ export const adjustPerTentacle = async (
         throw new Error("Must have a location");
     }
 
-    if (question.locationType === "major-road") {
-        const boundary = await majorRoadBoundary(question.lat, question.lng);
-        if (!boundary) return mapData;
-        const circle = await arcBuffer(
-            turf.featureCollection([turf.point([question.lng, question.lat])]),
-            question.radius,
-            question.unit,
-        );
-        return turf.intersect(turf.featureCollection([safeUnion(mapData), boundary, circle]));
-    }
-
-    const points: any = await findTentacleGeometryLocations(question);
+    const points = await findTentacleGeometryLocations(question);
 
     const voronoi = geoSpatialVoronoi(points);
 
@@ -146,22 +118,7 @@ export const hiderifyTentacles = async (question: TentacleQuestion) => {
         return question;
     }
 
-    if (question.locationType === "major-road") {
-        const hider = turf.point([$hiderMode.longitude, $hiderMode.latitude]);
-        const location = turf.point([question.lng, question.lat]);
-        if (turf.distance(hider, location, { units: question.unit }) > question.radius) {
-            question.location = false;
-            return question;
-        }
-        const road = await findNearestMajorRoad(
-            $hiderMode.latitude,
-            $hiderMode.longitude,
-        );
-        question.location = road ? majorRoadDisplayFeature(road) : false;
-        return question;
-    }
-
-    const points: any = await findTentacleGeometryLocations(question);
+    const points = await findTentacleGeometryLocations(question);
 
     const voronoi = geoSpatialVoronoi(points);
 
@@ -199,11 +156,7 @@ export const hiderifyTentacles = async (question: TentacleQuestion) => {
 };
 
 export const tentaclesPlanningPolygon = async (question: TentacleQuestion) => {
-    if (question.locationType === "major-road") {
-        const boundary = await majorRoadBoundary(question.lat, question.lng);
-        return boundary ? turf.polygonToLine(boundary) : false;
-    }
-    const points: any = await findTentacleGeometryLocations(question);
+    const points = await findTentacleGeometryLocations(question);
 
     const voronoi = geoSpatialVoronoi(points);
     const circle = await arcBuffer(

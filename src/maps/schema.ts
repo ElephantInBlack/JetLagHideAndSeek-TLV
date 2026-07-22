@@ -121,7 +121,6 @@ const tentacleLocationsFifteen = z.union([
 ]);
 
 const tentacleLocationsOne = z.union([
-    z.literal("major-road").describe("Major Roads"),
     z.literal("museum").describe("Museums"),
     z.literal("hospital").describe("Hospitals"),
     z.literal("cinema").describe("Movie Theaters"),
@@ -245,7 +244,6 @@ const ordinaryMatchingQuestionSchema = baseMatchingQuestionSchema.extend({
                 .describe("Park Question (Small+Medium Games)"),
             z.literal("transit-line").describe("Transit Line"),
             z.literal("street-path").describe("Street or Path"),
-            z.literal("major-road").describe("Major Road"),
             z.literal("neighborhood").describe("Neighborhood"),
             z.literal("landmass").describe("Landmass"),
         ])
@@ -330,7 +328,6 @@ const ordinaryMeasuringQuestionSchema = baseMeasuringQuestionSchema.extend({
     type: z
         .union([
             z.literal("coastline").describe("Coastline Question"),
-            z.literal("major-road").describe("Major Road Question"),
             z
                 .literal("airport")
                 .describe("Commercial Airport In Zone Question"),

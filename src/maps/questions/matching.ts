@@ -37,7 +37,6 @@ import type {
     HomeGameMatchingQuestions,
     MatchingQuestion,
 } from "@/maps/schema";
-import { findNearestMajorRoad, majorRoadBoundary, majorRoadName } from "./roads";
 
 const LOCAL_EXTENT: [number, number, number, number] = [34.6, 31.8, 35.1, 32.4];
 // Simplified from OpenStreetMap road and waterway geometry. These local
@@ -401,11 +400,6 @@ export const determineMatchingBoundary = _.memoize(
                 boundary = await findStreetBoundary(question.lat, question.lng);
                 break;
             }
-            case "major-road": {
-                boundary = await majorRoadBoundary(question.lat, question.lng);
-                if (!boundary) throw new Error("No major road found nearby");
-                break;
-            }
             case "transit-line": {
                 boundary = await findTransitLineBoundary(
                     question.lat,
@@ -562,16 +556,6 @@ export const adjustPerMatching = async (
 export const hiderifyMatching = async (question: MatchingQuestion) => {
     const $hiderMode = hiderMode.get();
     if ($hiderMode === false) {
-        return question;
-    }
-
-    if (question.type === "major-road") {
-        const seekerRoad = await findNearestMajorRoad(question.lat, question.lng);
-        const hiderRoad = await findNearestMajorRoad(
-            $hiderMode.latitude,
-            $hiderMode.longitude,
-        );
-        question.same = majorRoadName(seekerRoad) === majorRoadName(hiderRoad);
         return question;
     }
 

@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 import { applyQuestionsToMapGeoData, holedMask } from "@/maps";
 import { hiderifyQuestion } from "@/maps";
 import { clearCache, determineMapBoundaries } from "@/maps/api";
+import { preloadMajorRoads } from "@/maps/questions/roads";
 
 import { DraggableMarkers } from "./DraggableMarkers";
 import { LeafletFullScreenButton } from "./LeafletFullScreenButton";
@@ -135,6 +136,10 @@ export const Map = ({ className }: { className?: string }) => {
     const boundaryLayerSource = useRef<unknown>(null);
     const eliminationLayer = useRef<L.GeoJSON | null>(null);
     const planningLayers = useRef<L.GeoJSON[]>([]);
+
+    useEffect(() => {
+        void preloadMajorRoads();
+    }, []);
 
     const followMeMarkerRef = useMemo(
         () => ({ current: null as L.Marker | null }),

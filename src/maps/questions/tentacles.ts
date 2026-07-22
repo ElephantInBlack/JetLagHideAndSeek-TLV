@@ -65,7 +65,7 @@ export const findTentacleGeometryLocations = async (
     }
     if (question.locationType === "major-road") {
         return turf.featureCollection(
-            (await findMajorRoads(question.lat, question.lng)).map(
+            (await findMajorRoads()).map(
                 majorRoadDisplayFeature,
             ),
         );

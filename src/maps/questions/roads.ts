@@ -4,32 +4,50 @@ import _ from "lodash";
 import osmtogeojson from "osmtogeojson";
 
 import { getOverpassData } from "@/maps/api";
+import { BLANK_GEOJSON } from "@/maps/api/constants";
 
 export type MajorRoad = Feature<LineString | MultiLineString>;
 
 const roadName = (road: MajorRoad) =>
     road.properties?.tags?.name ?? road.properties?.name;
 
-/** Named motorway, trunk, primary, or secondary roads in the local game area. */
-export const findMajorRoads = _.memoize(
-    async (lat: number, lng: number) => {
-        const data = await getOverpassData(
-            `[out:json][timeout:25];way(around:30000,${lat},${lng})[highway~"^(motorway|trunk|primary|secondary)$"][name];out geom;`,
-            "Finding major roads...",
-        );
-        return (osmtogeojson(data).features as MajorRoad[]).filter(
-            (road) =>
-                (road.geometry.type === "LineString" ||
-                    road.geometry.type === "MultiLineString") &&
-                Boolean(roadName(road)),
-        );
-    },
-    (lat, lng) => `${lat.toFixed(3)},${lng.toFixed(3)}`,
-);
+const groupRoadSegmentsByName = (segments: MajorRoad[]) =>
+    Object.entries(_.groupBy(segments, roadName)).map(([name, roads]) =>
+        turf.multiLineString(
+            roads.flatMap((road) =>
+                road.geometry.type === "LineString"
+                    ? [road.geometry.coordinates]
+                    : road.geometry.coordinates,
+            ),
+            { id: name, name, displayName: name },
+        ) as MajorRoad,
+    );
+
+/**
+ * All named motorway, trunk, primary, and secondary roads within the fixed
+ * Tel Aviv game map. Loading this once makes a road answer consistent anywhere
+ * in the map and preserves every mapped segment of a road name.
+ */
+export const findMajorRoads = _.memoize(async () => {
+    const [west, south, east, north] = turf.bbox(BLANK_GEOJSON as any);
+    const data = await getOverpassData(
+        `[out:json][timeout:25];way(${south},${west},${north},${east})[highway~"^(motorway|trunk|primary|secondary)$"][name];out geom;`,
+        "Loading major roads for the Tel Aviv map...",
+    );
+    const segments = (osmtogeojson(data).features as MajorRoad[]).filter(
+        (road) =>
+            (road.geometry.type === "LineString" ||
+                road.geometry.type === "MultiLineString") &&
+            Boolean(roadName(road)),
+    );
+    return groupRoadSegmentsByName(segments);
+});
+
+export const preloadMajorRoads = () => findMajorRoads();
 
 export const findNearestMajorRoad = async (lat: number, lng: number) => {
     const point = turf.point([lng, lat]);
-    const roads = await findMajorRoads(lat, lng);
+    const roads = await findMajorRoads();
     return roads.reduce<MajorRoad | false>((nearest, road) => {
         if (!nearest) return road;
         return turf.pointToLineDistance(point, road, { units: "meters" }) <
@@ -46,7 +64,7 @@ export const majorRoadBoundary = async (lat: number, lng: number) => {
     const selected = await findNearestMajorRoad(lat, lng);
     const name = majorRoadName(selected);
     if (!name) return false;
-    const roads = await findMajorRoads(lat, lng);
+    const roads = await findMajorRoads();
     const matching = roads.filter((road) => roadName(road) === name);
     const buffered = turf.buffer(turf.featureCollection(matching), 0.05, {
         units: "kilometers",

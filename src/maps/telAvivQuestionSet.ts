@@ -1,6 +1,7 @@
 export const TEL_AVIV_MATCHING_TYPES = {
     "transit-line": "Transit Line",
     "street-path": "Street or Path",
+    "major-road": "Major Road",
     zone: "City",
     neighborhood: "Neighborhood",
     landmass: "Landmass",
@@ -14,6 +15,7 @@ export const TEL_AVIV_MATCHING_TYPES = {
 export const TEL_AVIV_MEASURING_TYPES = {
     "rail-measure": "Train Station",
     coastline: "Coastline",
+    "major-road": "Major Road",
     "park-full": "Park",
     "museum-full": "Museum",
     "library-full": "Library",
@@ -25,6 +27,7 @@ export const TEL_AVIV_TENTACLE_TYPES = {
     library: "Libraries",
     cinema: "Movie Theaters",
     museum: "Museums",
+    "major-road": "Major Roads",
 } as const;
 
 export const TEL_AVIV_MEASURING_STATION_IDS = new Set([

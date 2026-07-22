@@ -34,6 +34,7 @@ import type {
     MeasuringQuestion,
 } from "@/maps/schema";
 import { TEL_AVIV_MEASURING_STATION_IDS } from "@/maps/telAvivQuestionSet";
+import { findNearestMajorRoad } from "./roads";
 
 export interface AdminZoneInfo {
     name: string;
@@ -153,6 +154,10 @@ export const determineMeasuringBoundary = async (
         }
         case "coastline": {
             return coastlineMeasurementLines(await fetchCoastline());
+        }
+        case "major-road": {
+            const road = await findNearestMajorRoad(question.lat, question.lng);
+            return road ? [road] : [turf.multiLineString([])];
         }
         case "rail-measure": {
             const stations = await localPlaceDataProvider.getStations([
